@@ -27,3 +27,10 @@ AI응용프로젝트 수업이 시작됐다. 첫 과제는 **블로그 만들기
 - 이 블로그를 만드는 과정 → `프로젝트`
 
 > 이 블로그를 만드는 과정 자체도 기록으로 남긴다.
+
+## 제출 ✅
+
+- 저장소: [AIP-1/blog-basic-AIGJ_01_013-devlog](https://github.com/AIP-1/blog-basic-AIGJ_01_013-devlog) (Public)
+- 블로그: [aip-1.github.io/blog-basic-AIGJ_01_013-devlog](https://aip-1.github.io/blog-basic-AIGJ_01_013-devlog/)
+
+첫날 안에 HTML/CSS/JS 첫 버전 → SQLite DB 설계 → 학습 잔디·태그·질문 노트 → GitHub Actions 자동 배포까지 진행했다. 과정은 `블로그 제작기` 글들에 남겼다.
