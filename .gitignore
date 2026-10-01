@@ -2,4 +2,8 @@
 .vscode/
 *.log
 __pycache__/
+
+# 빌드 결과물: GitHub Actions가 매번 새로 만든다
+db/blog.db
 db/*.tmp
+_site/

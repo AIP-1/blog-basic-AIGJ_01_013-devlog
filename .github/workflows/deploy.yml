@@ -1,0 +1,66 @@
+# 마크다운/CSV를 push하면 GitHub가 DB를 빌드하고 GitHub Pages에 배포한다.
+name: Build & Deploy
+
+# ── 언제 실행할까? ───────────────────────────────────────────────
+on:
+  push:
+    branches: [main]        # main에 push되면 빌드 + 배포
+  pull_request:
+    branches: [main]        # PR이면 빌드가 되는지 검사만 (배포 X)
+  workflow_dispatch:        # Actions 탭에서 버튼으로 수동 실행
+
+# ── 이 워크플로가 받을 권한 (필요한 만큼만) ──────────────────────
+permissions:
+  contents: read            # 저장소 코드 읽기
+  pages: write              # Pages에 배포하기
+  id-token: write           # 배포할 때 본인 확인용 토큰
+
+# 배포가 연달아 일어나도 하나씩 순서대로
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # ── 1단계: 빌드 ────────────────────────────────────────────────
+  build:
+    runs-on: ubuntu-latest  # GitHub가 빌려주는 우분투 컴퓨터
+    steps:
+      - name: 저장소 코드 받기
+        uses: actions/checkout@v7
+
+      - name: 파이썬 설치
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: DB 빌드 (content → db/blog.db)
+        run: python scripts/build_db.py   # 글 형식이 틀리면 여기서 실패 → 배포 안 됨
+
+      - name: 배포할 파일만 모으기
+        run: |
+          mkdir -p _site/db
+          cp -r index.html css js _site/
+          cp db/blog.db _site/db/
+
+      - name: Pages 설정
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+
+      - name: 결과물 업로드
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  # ── 2단계: 배포 (빌드가 성공해야만 실행) ─────────────────────────
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: GitHub Pages에 배포
+        id: deployment
+        uses: actions/deploy-pages@v5

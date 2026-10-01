@@ -6,16 +6,20 @@
 - 프론트엔드: HTML / CSS / JavaScript (프레임워크 없음)
 - 데이터베이스: **SQLite**, 브라우저에서 [sql.js](https://sql.js.org/)(WebAssembly)로 직접 SQL 조회
 - 글 작성: Markdown 파일 → Python 빌드 스크립트 → `db/blog.db`
+- 배포: **GitHub Actions**가 push할 때마다 DB를 빌드해서 GitHub Pages에 자동 배포
 
 ## 주요 기능
 
 | 기능 | 설명 |
 |---|---|
 | 일자별 타임라인 | 날짜별로 묶어서 보여주고, 수업일은 **Day N**으로 표시 |
+| 학습 잔디 | GitHub 잔디처럼 날짜별 글 수를 색 농도로 표시 + 연속 기록 일수 |
 | 달력 | 사이드바 달력에서 수업일/기록한 날을 표시, 클릭하면 그날의 기록으로 이동 |
 | 회차별 보기 | 수업 회차마다 수업/자습/프로젝트 글 수를 표로 정리 |
 | 유형 / 프로젝트 필터 | `수업`, `자습`, `프로젝트` 유형과 프로젝트별 연재 모아보기 |
-| 검색 | 제목, 요약, 본문 검색 (SQL `LIKE`) |
+| 태그 | 태그 클라우드와 태그별 모아보기 (다대다 관계) |
+| 질문 노트 | 공부하다 생긴 질문과 답을 기록, 미해결 질문은 사이드바에 표시 |
+| 검색 | 제목, 요약, 본문, 태그 검색 (SQL `LIKE`) |
 | DB 페이지 | 테이블 구조와 행 수, 스키마 확인 + **브라우저에서 SQL 직접 실행** |
 | 다크 모드 / 반응형 | 설정 기억, 모바일에서는 사이드바가 아래로 이동 |
 
@@ -44,7 +48,19 @@
                  │ type_id    (FK, 필수)│
                  │ session_id (FK, 선택)│
                  │ project_id (FK, 선택)│
-                 └──────────────────────┘
+                 └───┬──────────────┬───┘
+                     │ 1            │ 1
+                   N │              │ N
+        ┌────────────▼───┐   ┌──────▼─────────┐
+        │  post_tags     │   │  questions     │
+        │  (post_id,     │   │  질문 노트      │
+        │   tag_id) PK   │   │  post_id (FK)  │
+        └────────┬───────┘   └────────────────┘
+                 │ N
+               1 │
+        ┌────────▼───────┐
+        │  tags  태그     │
+        └────────────────┘
 ```
 
 | 테이블 | 역할 |
@@ -53,11 +69,15 @@
 | `post_types` | 글 유형 코드 테이블: 수업(`class`) / 자습(`self`) / 프로젝트(`project`) |
 | `projects` | 수업 중 진행하는 프로젝트 (이 블로그 포함) |
 | `posts` | 모든 글. `date`가 일자별 정리의 기준 |
+| `tags`, `post_tags` | 태그와, 글-태그를 잇는 연결 테이블 (N:M) |
+| `questions` | 질문 노트. 관련 글(FK), 해결 규칙은 CHECK 제약으로 검증 |
 | `v_posts` (뷰) | 4개 테이블을 조인해 화면에서 바로 쓰는 글 목록 |
 
 - 글 유형을 코드 테이블로 분리해서 정해진 값만 들어가도록 FK로 제약
 - 수업이 없는 날(주말 자습 등)도 기록할 수 있게 `session_id`는 NULL 허용
 - `(date, seq)` UNIQUE로 하루에 여러 글을 쓸 때 순서 보장
+- 글과 태그는 N:M이라 연결 테이블 `post_tags`로 분리
+- 질문의 회차(Day N)는 저장하지 않고 `asked_on`으로 `sessions`와 조인 (정규화)
 
 전체 스키마는 [`db/schema.sql`](db/schema.sql)에 있습니다.
 
@@ -68,6 +88,7 @@ DB 파일을 `fetch`로 읽기 때문에 `index.html`을 더블클릭하면 동�
 ```bash
 git clone https://github.com/AIP-1/blog-basic-AIGJ_01_013-devlog.git
 cd blog-basic-AIGJ_01_013-devlog
+python3 scripts/build_db.py   # db/blog.db 만들기 (Git에는 올리지 않는 파일)
 python3 -m http.server
 # 브라우저에서 http://localhost:8000 접속
 ```
@@ -87,8 +108,8 @@ content/posts/2026-10-02-1-python-basics.md
 ```markdown
 ---
 title: 파이썬 기초 문법
-type: 수업              # 수업 / 자습 / 프로젝트
-project: devlog         # (선택) projects.csv의 slug
+type: 수업
+tags: Python, 기초
 summary: 목록에 보일 한두 줄 요약
 ---
 
@@ -96,6 +117,14 @@ summary: 목록에 보일 한두 줄 요약
 
 본문은 마크다운으로 자유롭게 작성합니다.
 ```
+
+| 항목 | 필수 | 설명 |
+|---|---|---|
+| `title` | ✔ | 제목. `#`이나 `:`가 들어가면 큰따옴표로 감싸기 |
+| `type` | ✔ | `수업` / `자습` / `프로젝트` |
+| `tags` | | 쉼표로 구분 |
+| `project` | | `projects.csv`의 slug (예: `devlog`) |
+| `summary` | | 목록에 보일 요약 |
 
 ### 2. 수업일이면 회차 추가
 
@@ -105,20 +134,45 @@ summary: 목록에 보일 한두 줄 요약
 2,2026-10-02,파이썬 기초,변수와 자료형
 ```
 
-### 3. DB 빌드 후 커밋
+### 3. (선택) 질문 기록
+
+`content/questions.csv`에 추가합니다. 해결하면 `resolved_on`과 `answer`를 채웁니다.
+
+```csv
+asked_on,question,resolved_on,answer,post_slug
+2026-10-02,리스트와 튜플의 차이는?,,,
+```
+
+### 4. push하면 끝
 
 ```bash
-python3 scripts/build_db.py
 git add -A
 git commit -m "Day 2 기록"
 git push
 ```
 
-빌드 스크립트는 파일 이름 형식, 유형, 프로젝트, 중복 여부를 검사하고, 오류가 있으면 기존 DB를 그대로 둔 채 이유를 알려줍니다.
+push하면 GitHub Actions가 DB를 빌드하고 배포합니다. 1~2분 뒤 블로그에 반영되고, 진행 상황은 저장소의 **Actions** 탭에서 볼 수 있어요.
+push 전에 확인하고 싶으면 `python3 scripts/build_db.py`로 미리 빌드해 보세요. 파일 이름 형식, 유형, 프로젝트, 중복, CHECK 제약을 검사하고, 오류가 있으면 기존 DB를 그대로 둔 채 이유를 알려줍니다.
+
+## 자동 배포 (GitHub Actions)
+
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+
+```text
+git push ─▶ build: 체크아웃 → 파이썬 설치 → build_db.py → 배포 파일 모으기 → 업로드
+                │ 실패하면 여기서 멈춤 (망가진 사이트가 배포되지 않음)
+                ▼
+            deploy: GitHub Pages에 배포
+```
+
+- `main`에 push하면 빌드 + 배포, Pull Request는 빌드 검사만 합니다.
+- `db/blog.db`는 빌드 결과물이라 Git에 올리지 않습니다. (`.gitignore`)
 
 ## 폴더 구조
 
 ```
+├── .github/workflows/
+│   └── deploy.yml        # 자동 빌드·배포 (GitHub Actions)
 ├── index.html            # 페이지 뼈대 (헤더, 본문, 사이드바)
 ├── css/style.css         # 디자인, 다크 모드, 반응형
 ├── js/
@@ -126,10 +180,11 @@ git push
 │   └── app.js            # 해시 라우팅, 화면 렌더링, 달력, SQL 콘솔
 ├── db/
 │   ├── schema.sql        # 테이블 설계 (DDL)
-│   └── blog.db           # 빌드된 SQLite DB (사이트가 읽는 파일)
+│   └── blog.db           # 빌드 결과물 (Git에 올리지 않음)
 ├── content/
 │   ├── sessions.csv      # 수업 회차
 │   ├── projects.csv      # 프로젝트
+│   ├── questions.csv     # 질문 노트
 │   └── posts/*.md        # 글 (마크다운)
 └── scripts/build_db.py   # content → db/blog.db 빌드
 ```
@@ -143,6 +198,8 @@ git push
 | `#/day/1` | Day 1 (해당 날짜로 이동) |
 | `#/days` | 회차별 표 |
 | `#/type/class` | 유형별 (`class` / `self` / `project`) |
+| `#/tag/Git` | 태그별 |
+| `#/questions` | 질문 노트 |
 | `#/project/devlog` | 프로젝트 연재 |
 | `#/post/<slug>` | 글 상세 |
 | `#/search/<검색어>` | 검색 결과 |
