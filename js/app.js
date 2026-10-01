@@ -68,6 +68,102 @@ function groupByDate(posts) {
   return groups;
 }
 
+function toKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function addDays(d, n) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+// ===== 학습 잔디 =====
+const HEATMAP_MIN_WEEKS = 20;
+
+function heatLevel(cnt) {
+  if (!cnt) return 0;
+  if (cnt === 1) return 1;
+  if (cnt <= 3) return 2;
+  if (cnt <= 5) return 3;
+  return 4;
+}
+
+// 연속 기록 일수: 최장 기록과, 오늘(또는 어제)까지 이어지고 있는 현재 기록
+function calcStreaks(dates) {
+  let longest = 0;
+  let run = 0;
+  let prev = null;
+  dates.forEach(key => {
+    run = prev && toKey(addDays(toDate(prev), 1)) === key ? run + 1 : 1;
+    longest = Math.max(longest, run);
+    prev = key;
+  });
+
+  const today = new Date();
+  const alive = prev === toKey(today) || prev === toKey(addDays(today, -1));
+  return { longest, current: alive ? run : 0 };
+}
+
+function renderHeatmap() {
+  const rows = Posts.countsByDate();
+  if (!rows.length) return "";
+
+  const counts = {};
+  rows.forEach(r => { counts[r.date] = r.cnt; });
+
+  // 첫 기록이 있는 주의 일요일부터, 최소 20주 또는 오늘이 있는 주까지
+  const first = toDate(rows[0].date);
+  const start = addDays(first, -first.getDay());
+  const lastRecord = toDate(rows[rows.length - 1].date);
+  const end = new Date(Math.max(lastRecord, new Date()));
+  const weeks = Math.max(HEATMAP_MIN_WEEKS, Math.ceil((end - start) / 86400000 / 7) + 1);
+
+  const today = toKey(new Date());
+  let cells = "";
+  let months = "";
+  let lastMonth = -1;
+
+  for (let w = 0; w < weeks; w++) {
+    const weekStart = addDays(start, w * 7);
+    // 그 주에 1일이 들어 있으면 위쪽에 월 표시
+    const firstOfMonth = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(weekStart, i)).find(d => d.getDate() === 1);
+    const labelDate = firstOfMonth || (w === 0 ? weekStart : null);
+    if (labelDate && labelDate.getMonth() !== lastMonth) {
+      months += `<span style="grid-column:${w + 1}">${labelDate.getMonth() + 1}월</span>`;
+      lastMonth = labelDate.getMonth();
+    }
+
+    for (let i = 0; i < 7; i++) {
+      const key = toKey(addDays(weekStart, i));
+      const cnt = counts[key] || 0;
+      const future = key > today ? " future" : "";
+      cells += cnt
+        ? `<a href="#/date/${key}" class="heat l${heatLevel(cnt)}" title="${key} · 글 ${cnt}개"></a>`
+        : `<span class="heat l0${future}" title="${key}"></span>`;
+    }
+  }
+
+  const { longest, current } = calcStreaks(rows.map(r => r.date));
+  const total = rows.reduce((sum, r) => sum + r.cnt, 0);
+
+  return `
+    <section class="card heatmap-card">
+      <div class="heatmap-head">
+        <h2>학습 잔디</h2>
+        <span class="count">${rows.length}일 동안 글 ${total}개 · 현재 연속 ${current}일 · 최장 연속 ${longest}일</span>
+      </div>
+      <div class="heatmap-scroll">
+        <div class="heatmap" style="--weeks:${weeks}">
+          <div class="heatmap-months">${months}</div>
+          <div class="heatmap-days"><span></span><span>월</span><span></span><span>수</span><span></span><span>금</span><span></span></div>
+          <div class="heatmap-grid">${cells}</div>
+        </div>
+      </div>
+      <div class="heatmap-legend">
+        적음 <span class="heat l0"></span><span class="heat l1"></span><span class="heat l2"></span><span class="heat l3"></span><span class="heat l4"></span> 많음
+      </div>
+    </section>`;
+}
+
 // ===== 타임라인 (일자별 목록) =====
 function renderTimeline({ heading, intro = "", posts, page, baseHash }) {
   const groups = groupByDate(posts);
@@ -423,7 +519,13 @@ function render() {
     active.nav = "db";
     renderDbPage();
   } else {
-    renderTimeline({ heading: "전체 타임라인", posts: Posts.list(), page, baseHash: "#" });
+    renderTimeline({
+      heading: "전체 타임라인",
+      intro: page === 1 ? renderHeatmap() : "",
+      posts: Posts.list(),
+      page,
+      baseHash: "#"
+    });
   }
 
   // 선택한 날짜가 있으면 달력도 그 달로 이동

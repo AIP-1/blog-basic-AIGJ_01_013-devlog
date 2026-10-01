@@ -97,6 +97,11 @@ const Posts = {
     );
   },
 
+  // 잔디용: 날짜별 글 수 전체
+  countsByDate() {
+    return DB.all("SELECT date, COUNT(*) AS cnt FROM posts GROUP BY date ORDER BY date");
+  },
+
   latestDate() {
     const row = DB.one("SELECT MAX(date) AS d FROM posts");
     return row && row.d;
