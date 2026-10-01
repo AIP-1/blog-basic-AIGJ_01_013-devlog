@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="이진행의 개발 공부 기록 블로그">
+  <title>진행의 개발 일지</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="#/" class="logo">진행의 개발 일지</a>
+      <form class="search-form" id="searchForm" role="search">
+        <input type="search" id="searchInput" placeholder="검색어를 입력하세요" aria-label="블로그 검색">
+        <button type="submit" aria-label="검색">🔍</button>
+      </form>
+      <button class="theme-toggle" id="themeToggle" aria-label="다크 모드 전환">🌙</button>
+    </div>
+  </header>
+
+  <div class="container layout">
+    <main id="content" class="content" aria-live="polite"></main>
+
+    <aside class="sidebar">
+      <section class="widget profile">
+        <div class="avatar">진</div>
+        <p class="profile-name">이진행</p>
+        <p class="profile-desc">매일 조금씩 배우고 기록합니다.<br>Git, Web, 그리고 개발 이야기.</p>
+        <a class="profile-link" href="https://github.com/ehgo508" target="_blank" rel="noopener">GitHub ↗</a>
+      </section>
+
+      <section class="widget">
+        <h2 class="widget-title">카테고리</h2>
+        <ul id="categoryList" class="category-list"></ul>
+      </section>
+
+      <section class="widget">
+        <h2 class="widget-title">최근 글</h2>
+        <ul id="recentList" class="recent-list"></ul>
+      </section>
+
+      <section class="widget">
+        <h2 class="widget-title">태그</h2>
+        <div id="tagCloud" class="tag-cloud"></div>
+      </section>
+
+      <section class="widget visitor">
+        <h2 class="widget-title">방문자</h2>
+        <p>Total <strong id="visitTotal">-</strong></p>
+        <p>Today <strong id="visitToday">-</strong></p>
+      </section>
+    </aside>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>© 2026 이진행 · Tistory를 참고해 HTML/CSS/JS로 만든 블로그</p>
+    </div>
+  </footer>
+
+  <script src="js/posts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
