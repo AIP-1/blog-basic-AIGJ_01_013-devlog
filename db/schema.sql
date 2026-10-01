@@ -5,6 +5,7 @@
 --   post_types (1) ──< (N) posts    글 유형          (필수)
 --   projects   (1) ──< (N) posts    프로젝트 기록    (선택)
 --   posts      (N) ──< post_tags >── (M) tags   태그 (다대다)
+--   posts      (1) ──< (N) questions  질문 노트의 관련 글 (선택)
 -- =====================================================================
 
 PRAGMA foreign_keys = ON;
@@ -88,6 +89,26 @@ CREATE TABLE post_tags (
 );
 
 CREATE INDEX idx_post_tags_tag ON post_tags (tag_id);
+
+-- ---------------------------------------------------------------------
+-- 질문 노트: 공부하다 생긴 질문과 해결 과정
+--   - 질문한 날이 몇 회차(Day N)인지는 asked_on으로 sessions와 조인해서 구한다
+--     (계산할 수 있는 값은 따로 저장하지 않는다 → 정규화)
+-- ---------------------------------------------------------------------
+CREATE TABLE questions (
+    id           INTEGER PRIMARY KEY,
+    question     TEXT NOT NULL,
+    asked_on     TEXT NOT NULL,
+    answer       TEXT,
+    resolved_on  TEXT,
+    post_id      INTEGER REFERENCES posts (id) ON DELETE SET NULL,  -- 관련 글
+    -- 해결했으면 답과 해결 날짜가 둘 다 있어야 하고, 미해결이면 둘 다 없어야 한다
+    CHECK ((answer IS NULL) = (resolved_on IS NULL)),
+    -- 질문하기 전에 해결할 수는 없다
+    CHECK (resolved_on IS NULL OR resolved_on >= asked_on)
+);
+
+CREATE INDEX idx_questions_asked ON questions (asked_on);
 
 -- ---------------------------------------------------------------------
 -- 뷰: 화면에서 바로 쓰기 좋게 조인해 둔 글 목록

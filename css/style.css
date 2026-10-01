@@ -439,6 +439,56 @@ a.heat:hover { outline: 1px solid var(--text); }
 .empty-cell { text-align: center; color: var(--text-sub); }
 .null { color: var(--text-sub); }
 
+/* ===== 질문 노트 ===== */
+.question {
+  padding: 16px 20px;
+  margin-bottom: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+}
+
+.question.resolved { border-left-color: #10b981; }
+
+.question-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.82rem;
+  color: var(--text-sub);
+}
+
+.q-status { font-weight: 700; color: var(--text); }
+.question-text { margin: 8px 0 0; font-weight: 700; }
+
+.question-answer {
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--code-bg);
+  font-size: 0.92rem;
+}
+
+.question-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.day-questions { margin-bottom: 20px; padding: 16px 20px; }
+.day-questions summary { cursor: pointer; font-weight: 700; }
+.day-questions .question { margin: 10px 0 0; }
+
+.q-summary {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.q-summary b { color: var(--accent); font-size: 1.1rem; }
+
 /* ===== 글 상세 ===== */
 .post-detail { padding: 40px; }
 

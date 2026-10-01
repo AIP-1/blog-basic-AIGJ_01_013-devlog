@@ -111,6 +111,37 @@ def build(conn):
 
         add_tags(conn, cur.lastrowid, meta.get("tags", ""))
 
+    errors += load_questions(conn)
+    return errors
+
+
+def load_questions(conn):
+    """content/questions.csv를 questions 테이블에 넣는다. (글을 모두 넣은 뒤에 실행)"""
+    path = CONTENT / "questions.csv"
+    if not path.exists():
+        return []
+
+    post_ids = dict(conn.execute("SELECT slug, id FROM posts"))
+    errors = []
+    # 2번째 줄부터 데이터 (1번째 줄은 헤더)
+    for line_no, row in enumerate(read_csv(path), start=2):
+        where = f"questions.csv {line_no}번째 줄"
+        slug = row["post_slug"].strip()
+        if slug and slug not in post_ids:
+            errors.append(f"{where}: 없는 글입니다 ({slug!r})")
+            continue
+        try:
+            conn.execute(
+                """INSERT INTO questions (question, asked_on, answer, resolved_on, post_id)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    row["question"], row["asked_on"],
+                    row["answer"].strip() or None, row["resolved_on"].strip() or None,
+                    post_ids.get(slug),
+                ),
+            )
+        except sqlite3.IntegrityError as e:
+            errors.append(f"{where}: {e} (해결했다면 answer와 resolved_on을 둘 다, 질문 날짜 이후로 적어야 합니다)")
     return errors
 
 
@@ -146,7 +177,9 @@ def main():
             """SELECT
                  (SELECT COUNT(*) FROM sessions),
                  (SELECT COUNT(*) FROM projects),
-                 (SELECT COUNT(*) FROM posts)"""
+                 (SELECT COUNT(*) FROM posts),
+                 (SELECT COUNT(*) FROM questions),
+                 (SELECT COUNT(*) FROM questions WHERE resolved_on IS NULL)"""
         ).fetchone()
         by_type = conn.execute(
             """SELECT t.name, COUNT(p.id) FROM post_types t
@@ -159,6 +192,7 @@ def main():
     os.replace(tmp_path, DB_PATH)
     print(f"✔ {DB_PATH.relative_to(ROOT)} 생성 완료")
     print(f"  회차 {summary[0]}개 · 프로젝트 {summary[1]}개 · 글 {summary[2]}개")
+    print(f"  질문 {summary[3]}개 (미해결 {summary[4]}개)")
     print("  " + " · ".join(f"{name} {cnt}" for name, cnt in by_type))
 
 

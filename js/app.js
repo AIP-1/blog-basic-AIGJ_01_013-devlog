@@ -246,6 +246,35 @@ function renderDays() {
     </div>`;
 }
 
+// ===== 질문 노트 =====
+function questionCard(q) {
+  const resolved = Boolean(q.resolved_on);
+  return `
+    <article class="question ${resolved ? "resolved" : "open"}">
+      <div class="question-meta">
+        <span class="q-status">${resolved ? "✅ 해결" : "❓ 미해결"}</span>
+        <a href="#/date/${q.asked_on}">${dayBadge(q.day_no)} ${formatDate(q.asked_on)}</a>
+      </div>
+      <p class="question-text">Q. ${esc(q.question)}</p>
+      ${resolved ? `<p class="question-answer">A. ${esc(q.answer)}</p>` : ""}
+      ${q.post_slug ? `<a class="question-link" href="#/post/${esc(q.post_slug)}">관련 글: ${esc(q.post_title)} →</a>` : ""}
+    </article>`;
+}
+
+function renderQuestions() {
+  const all = Questions.list();
+  const open = all.filter(q => !q.resolved_on);
+  const done = all.filter(q => q.resolved_on);
+
+  $content.innerHTML = `
+    <h1 class="list-heading">질문 노트 <span class="count">${all.length}개 중 ${done.length}개 해결</span></h1>
+    <p class="list-intro">수업이나 공부 중에 생긴 질문을 적어 두고, 해결하면 답을 남깁니다.</p>
+    <h2 class="section-title">❓ 미해결 <span class="count">${open.length}</span></h2>
+    ${open.length ? open.map(questionCard).join("") : `<div class="empty">미해결 질문이 없어요 🎉</div>`}
+    <h2 class="section-title">✅ 해결 <span class="count">${done.length}</span></h2>
+    ${done.length ? done.map(questionCard).join("") : `<div class="empty">아직 해결한 질문이 없어요.</div>`}`;
+}
+
 // ===== 글 상세 =====
 function renderPost(slug) {
   const p = Posts.bySlug(slug);
@@ -298,6 +327,10 @@ const PRESET_QUERIES = [
     sql: `SELECT t.name AS tag, COUNT(*) AS posts,\n       GROUP_CONCAT(p.title, ' / ') AS titles\nFROM tags t\nJOIN post_tags pt ON pt.tag_id = t.id\nJOIN posts p     ON p.id = pt.post_id\nGROUP BY t.id\nORDER BY posts DESC;`
   },
   {
+    label: "미해결 질문",
+    sql: `SELECT q.asked_on, s.day_no, q.question\nFROM questions q\nLEFT JOIN sessions s ON s.date = q.asked_on\nWHERE q.resolved_on IS NULL;`
+  },
+  {
     label: "회차 목록",
     sql: `SELECT * FROM sessions ORDER BY day_no;`
   }
@@ -322,7 +355,8 @@ function renderDbPage() {
       <pre class="erd">sessions   (1) ──&lt; (N) posts    수업 회차별 글   (선택)
 post_types (1) ──&lt; (N) posts    글 유형          (필수)
 projects   (1) ──&lt; (N) posts    프로젝트 기록    (선택)
-posts      (N) ──&lt; post_tags &gt;── (M) tags   태그 (다대다)</pre>
+posts      (N) ──&lt; post_tags &gt;── (M) tags   태그 (다대다)
+posts      (1) ──&lt; (N) questions  질문의 관련 글  (선택)</pre>
       <details>
         <summary>전체 스키마 보기</summary>
         <pre><code>${esc(schema)}</code></pre>
@@ -411,6 +445,14 @@ function renderSidebar(active) {
         📁 ${esc(p.name)} <span class="count">(${p.cnt})</span></a></li>`).join("")
     : `<li class="count">아직 없음</li>`;
 
+  const qc = Questions.counts();
+  const openQs = Questions.list({ open: true }).slice(0, 3);
+  document.getElementById("questionWidget").innerHTML = `
+    <a href="#/questions" class="q-summary">미해결 <b>${qc.open}</b> / 전체 ${qc.total}</a>
+    ${openQs.length
+      ? `<ul class="side-list recent-list">${openQs.map(q => `<li><a href="#/questions" title="${esc(q.question)}">❓ ${esc(q.question)}</a></li>`).join("")}</ul>`
+      : ""}`;
+
   const tags = Tags.withCounts();
   document.getElementById("tagCloud").innerHTML = tags.length
     ? tags.map(t => `<a class="tag ${active.tag === t.name ? "active" : ""}" href="#/tag/${encodeURIComponent(t.name)}">#${esc(t.name)} <span class="count">${t.cnt}</span></a>`).join("")
@@ -493,9 +535,13 @@ function render() {
   } else if (type === "date" && value) {
     selectedDate = value;
     const session = Sessions.byDate(value);
+    const questions = Questions.list({ date: value });
     renderTimeline({
       heading: `<strong>${esc(value.replace(/-/g, ". "))}</strong>의 기록`,
-      intro: session && session.summary ? `<p class="list-intro">${esc(session.summary)}</p>` : "",
+      intro: (session && session.summary ? `<p class="list-intro">${esc(session.summary)}</p>` : "") +
+        (questions.length
+          ? `<details class="card day-questions"><summary>이날의 질문 ${questions.length}개</summary>${questions.map(questionCard).join("")}</details>`
+          : ""),
       posts: Posts.list({ date: value }),
       page,
       baseHash: `#/date/${value}`
@@ -542,6 +588,9 @@ function render() {
       page,
       baseHash: `#/search/${encodeURIComponent(value)}`
     });
+  } else if (type === "questions") {
+    active.nav = "questions";
+    renderQuestions();
   } else if (type === "db") {
     active.nav = "db";
     renderDbPage();

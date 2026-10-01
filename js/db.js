@@ -139,6 +139,34 @@ const Sessions = {
   }
 };
 
+const Questions = {
+  // 질문한 날의 회차는 저장하지 않고 sessions와 날짜로 조인해서 구한다
+  list({ date, open } = {}) {
+    const where = [];
+    const params = [];
+    if (date) { where.push("q.asked_on = ?"); params.push(date); }
+    if (open) where.push("q.resolved_on IS NULL");
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    return DB.all(
+      `SELECT q.id, q.question, q.asked_on, q.answer, q.resolved_on,
+              s.day_no, p.slug AS post_slug, p.title AS post_title
+       FROM questions q
+       LEFT JOIN sessions s ON s.date = q.asked_on
+       LEFT JOIN posts    p ON p.id   = q.post_id
+       ${whereSql}
+       ORDER BY q.resolved_on IS NOT NULL, q.asked_on DESC, q.id DESC`,
+      params
+    );
+  },
+
+  counts() {
+    return DB.one(
+      `SELECT COUNT(*) AS total, COALESCE(SUM(resolved_on IS NULL), 0) AS open
+       FROM questions`
+    );
+  }
+};
+
 const Tags = {
   // 태그 클라우드: 글이 많은 태그부터
   withCounts() {
