@@ -21,6 +21,28 @@ git push ─▶ build: 체크아웃 → 파이썬 설치 → build_db.py → 배
             deploy: GitHub Pages에 배포
 ```
 
+### 비유: 식당 주방
+
+| 식당 | GitHub Actions |
+|---|---|
+| 손님이 주문서를 넣음 | 내가 `git push` |
+| 벽에 붙은 레시피 | `.github/workflows/deploy.yml` |
+| 요리사가 레시피대로 요리 | GitHub가 컴퓨터를 하나 켜서 yml 순서대로 실행 |
+| 완성된 요리를 홀에 내보냄 | 결과물을 GitHub Pages에 배포 |
+
+### push하면 실제로 일어나는 일
+
+1. 내가 `git push`
+2. GitHub: "main에 push가 왔네? `on: push`가 있으니 실행!"
+3. GitHub가 빈 Ubuntu 컴퓨터(가상머신)를 하나 빌려준다.
+4. 그 컴퓨터가 yml의 steps를 위에서부터 실행한다. **내 컴퓨터에서 하던 `python3 scripts/build_db.py`를 똑같이 대신 돌리는 것이다.**
+5. build가 성공하면 deploy가 Pages에 올린다.
+6. 일이 끝나면 빌려준 컴퓨터는 삭제된다.
+
+마법이 아니라 **명령어 목록을 남의 컴퓨터에서 자동으로 돌리는 것**이다. Actions 탭에서 실행 기록을 열어 "DB 빌드" 단계를 펼쳐 보면, 내 터미널에서 보던 `✔ db/blog.db 생성 완료` 메시지가 GitHub 컴퓨터에서도 찍혀 있다.
+
+> push할 때마다 자동으로 빌드·검사·배포하는 방식을 **CI/CD**(지속적 통합 / 지속적 배포)라고 부른다.
+
 ## 워크플로 파일 핵심
 
 ```yaml
