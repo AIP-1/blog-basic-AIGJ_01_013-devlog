@@ -40,21 +40,26 @@ const DB = {
 
 // 목록에 필요한 컬럼 (본문 content_md는 무거워서 제외)
 const LIST_COLUMNS = `id, slug, title, summary, date, seq, type_code, type_name, type_color,
-                      day_no, session_title, project_slug, project_name`;
+                      day_no, session_title, project_slug, project_name, tags`;
 
 const Posts = {
   // 조건에 맞는 글을 최신 날짜 → 같은 날은 순서대로
-  list({ type, project, date, keyword } = {}) {
+  list({ type, project, date, tag, keyword } = {}) {
     const where = [];
     const params = [];
     if (type)    { where.push("type_code = ?");    params.push(type); }
     if (project) { where.push("project_slug = ?"); params.push(project); }
     if (date)    { where.push("date = ?");         params.push(date); }
+    if (tag) {
+      where.push(`id IN (SELECT pt.post_id FROM post_tags pt
+                         JOIN tags t ON t.id = pt.tag_id WHERE t.name = ?)`);
+      params.push(tag);
+    }
     if (keyword) {
       // %, _ 는 LIKE에서 특수문자라서 글자 그대로 찾도록 이스케이프한다
-      where.push("(title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR content_md LIKE ? ESCAPE '\\')");
+      where.push("(title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR content_md LIKE ? ESCAPE '\\' OR tags LIKE ? ESCAPE '\\')");
       const like = `%${keyword.replace(/[\\%_]/g, "\\$&")}%`;
-      params.push(like, like, like);
+      params.push(like, like, like, like);
     }
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
     return DB.all(
@@ -131,6 +136,17 @@ const Sessions = {
 
   byDay(dayNo) {
     return DB.one("SELECT * FROM sessions WHERE day_no = ?", [dayNo]);
+  }
+};
+
+const Tags = {
+  // 태그 클라우드: 글이 많은 태그부터
+  withCounts() {
+    return DB.all(
+      `SELECT t.name, COUNT(*) AS cnt
+       FROM tags t JOIN post_tags pt ON pt.tag_id = t.id
+       GROUP BY t.id ORDER BY cnt DESC, t.name`
+    );
   }
 };
 

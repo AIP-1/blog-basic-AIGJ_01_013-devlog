@@ -96,7 +96,7 @@ def build(conn):
             continue
 
         try:
-            conn.execute(
+            cur = conn.execute(
                 """INSERT INTO posts
                    (slug, title, summary, content_md, date, seq, type_id, session_id, project_id)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -107,8 +107,21 @@ def build(conn):
             )
         except sqlite3.IntegrityError as e:
             errors.append(f"{name}: {e} (slug 또는 같은 날짜의 순서 번호가 겹칩니다)")
+            continue
+
+        add_tags(conn, cur.lastrowid, meta.get("tags", ""))
 
     return errors
+
+
+def add_tags(conn, post_id, tags_text):
+    """'Git, GitHub' 형식의 태그를 tags / post_tags 테이블에 연결한다."""
+    names = {t.strip() for t in tags_text.split(",") if t.strip()}
+    for tag in sorted(names, key=str.lower):
+        # 이미 있는 태그면 무시하고, 없으면 새로 만든다 (대소문자 구분 없음)
+        conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+        tag_id = conn.execute("SELECT id FROM tags WHERE name = ?", (tag,)).fetchone()[0]
+        conn.execute("INSERT OR IGNORE INTO post_tags (post_id, tag_id) VALUES (?, ?)", (post_id, tag_id))
 
 
 def main():

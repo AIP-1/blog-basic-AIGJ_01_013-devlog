@@ -4,6 +4,7 @@
 --   sessions   (1) ──< (N) posts    수업 회차별 글   (선택)
 --   post_types (1) ──< (N) posts    글 유형          (필수)
 --   projects   (1) ──< (N) posts    프로젝트 기록    (선택)
+--   posts      (N) ──< post_tags >── (M) tags   태그 (다대다)
 -- =====================================================================
 
 PRAGMA foreign_keys = ON;
@@ -71,6 +72,24 @@ CREATE INDEX idx_posts_type    ON posts (type_id);
 CREATE INDEX idx_posts_project ON posts (project_id);
 
 -- ---------------------------------------------------------------------
+-- 태그: 글과 다대다(N:M) 관계
+--   글 하나에 태그 여러 개, 태그 하나에 글 여러 개
+--   → 두 테이블을 잇는 연결 테이블(post_tags)로 표현한다
+-- ---------------------------------------------------------------------
+CREATE TABLE tags (
+    id    INTEGER PRIMARY KEY,
+    name  TEXT NOT NULL UNIQUE COLLATE NOCASE   -- 'git'과 'Git'을 같은 태그로 취급
+);
+
+CREATE TABLE post_tags (
+    post_id  INTEGER NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
+    tag_id   INTEGER NOT NULL REFERENCES tags (id)  ON DELETE CASCADE,
+    PRIMARY KEY (post_id, tag_id)               -- 같은 글에 같은 태그 중복 금지
+);
+
+CREATE INDEX idx_post_tags_tag ON post_tags (tag_id);
+
+-- ---------------------------------------------------------------------
 -- 뷰: 화면에서 바로 쓰기 좋게 조인해 둔 글 목록
 -- ---------------------------------------------------------------------
 CREATE VIEW v_posts AS
@@ -82,7 +101,10 @@ SELECT
     s.day_no,
     s.title AS session_title,
     pr.slug AS project_slug,
-    pr.name AS project_name
+    pr.name AS project_name,
+    (SELECT GROUP_CONCAT(tg.name, ',')
+       FROM post_tags pt JOIN tags tg ON tg.id = pt.tag_id
+      WHERE pt.post_id = p.id) AS tags
 FROM posts p
 JOIN post_types     t  ON t.id  = p.type_id
 LEFT JOIN sessions  s  ON s.id  = p.session_id

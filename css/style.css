@@ -363,6 +363,30 @@ a.heat:hover { outline: 1px solid var(--text); }
   font-size: 0.92rem;
 }
 
+/* ===== 태그 ===== */
+.post-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.post-detail > .post-tags { margin: 40px 0 0; }
+
+.tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.tag {
+  padding: 2px 10px;
+  border-radius: 14px;
+  background: var(--code-bg);
+  font-size: 0.8rem;
+  color: var(--text-sub);
+}
+
+.tag:hover,
+.tag.active { background: var(--accent-soft); color: var(--accent); }
+.tag .count { font-size: 0.75rem; }
+
 /* ===== 페이지네이션 ===== */
 .pagination {
   display: flex;

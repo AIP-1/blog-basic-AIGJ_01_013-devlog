@@ -1,6 +1,7 @@
 ---
 title: 첫 과제는 블로그 만들기
 type: 수업
+tags: 과제, 블로그, Tistory
 summary: AI응용프로젝트 첫 수업. Tistory를 참고해 블로그를 만들고 AIP-1 Organization에 저장소로 올리는 과제를 받았다.
 ---
 

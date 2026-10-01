@@ -53,6 +53,12 @@ function typeBadge(p) {
   return `<a class="badge" href="#/type/${esc(p.type_code)}" style="--c:${esc(p.type_color)}">${esc(p.type_name)}</a>`;
 }
 
+function tagChips(tags) {
+  if (!tags) return "";
+  return `<div class="post-tags">${tags.split(",").sort()
+    .map(t => `<a class="tag" href="#/tag/${encodeURIComponent(t)}">#${esc(t)}</a>`).join("")}</div>`;
+}
+
 function dayBadge(dayNo) {
   return dayNo ? `<span class="day-badge">Day ${dayNo}</span>` : `<span class="day-badge off">자습일</span>`;
 }
@@ -211,6 +217,7 @@ function postItem(p) {
       </div>
       <h2 class="post-item-title"><a href="#/post/${esc(p.slug)}">${esc(p.title)}</a></h2>
       ${p.summary ? `<p class="post-excerpt">${esc(p.summary)}</p>` : ""}
+      ${tagChips(p.tags)}
     </article>`;
 }
 
@@ -262,6 +269,8 @@ function renderPost(slug) {
 
       <div class="post-content">${renderMarkdown(p.content_md)}</div>
 
+      ${tagChips(p.tags)}
+
       <nav class="post-nav">
         ${older ? `<a href="#/post/${esc(older.slug)}"><small>← 이전 글</small>${esc(older.title)}</a>` : "<span></span>"}
         ${newer ? `<a class="next" href="#/post/${esc(newer.slug)}"><small>다음 글 →</small>${esc(newer.title)}</a>` : ""}
@@ -283,6 +292,10 @@ const PRESET_QUERIES = [
   {
     label: "프로젝트 기록",
     sql: `SELECT pr.name, p.date, p.title\nFROM posts p\nJOIN projects pr ON pr.id = p.project_id\nORDER BY p.date, p.seq;`
+  },
+  {
+    label: "태그별 글 (N:M 조인)",
+    sql: `SELECT t.name AS tag, COUNT(*) AS posts,\n       GROUP_CONCAT(p.title, ' / ') AS titles\nFROM tags t\nJOIN post_tags pt ON pt.tag_id = t.id\nJOIN posts p     ON p.id = pt.post_id\nGROUP BY t.id\nORDER BY posts DESC;`
   },
   {
     label: "회차 목록",
@@ -308,7 +321,8 @@ function renderDbPage() {
       <div class="table-cards">${cards}</div>
       <pre class="erd">sessions   (1) ──&lt; (N) posts    수업 회차별 글   (선택)
 post_types (1) ──&lt; (N) posts    글 유형          (필수)
-projects   (1) ──&lt; (N) posts    프로젝트 기록    (선택)</pre>
+projects   (1) ──&lt; (N) posts    프로젝트 기록    (선택)
+posts      (N) ──&lt; post_tags &gt;── (M) tags   태그 (다대다)</pre>
       <details>
         <summary>전체 스키마 보기</summary>
         <pre><code>${esc(schema)}</code></pre>
@@ -396,6 +410,11 @@ function renderSidebar(active) {
     ? projects.map(p => `<li><a href="#/project/${esc(p.slug)}" class="${active.project === p.slug ? "active" : ""}">
         📁 ${esc(p.name)} <span class="count">(${p.cnt})</span></a></li>`).join("")
     : `<li class="count">아직 없음</li>`;
+
+  const tags = Tags.withCounts();
+  document.getElementById("tagCloud").innerHTML = tags.length
+    ? tags.map(t => `<a class="tag ${active.tag === t.name ? "active" : ""}" href="#/tag/${encodeURIComponent(t.name)}">#${esc(t.name)} <span class="count">${t.cnt}</span></a>`).join("")
+    : `<span class="count">아직 없음</span>`;
 
   document.getElementById("recentList").innerHTML = Posts.recent()
     .map(p => `<li><a href="#/post/${esc(p.slug)}">${esc(p.title)}</a></li>`)
@@ -507,6 +526,14 @@ function render() {
       posts: Posts.list({ project: value }),
       page,
       baseHash: `#/project/${encodeURIComponent(value)}`
+    });
+  } else if (type === "tag" && value) {
+    active.tag = value;
+    renderTimeline({
+      heading: `<strong>#${esc(value)}</strong> 태그`,
+      posts: Posts.list({ tag: value }),
+      page,
+      baseHash: `#/tag/${encodeURIComponent(value)}`
     });
   } else if (type === "search" && value) {
     renderTimeline({
