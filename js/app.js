@@ -1,16 +1,13 @@
 // ===== 설정 =====
-const PER_PAGE = 4; // 한 페이지에 보여줄 글 수
-
-// 최신 글이 먼저 오도록 정렬 (날짜 → id 순)
-const posts = [...POSTS].sort((a, b) =>
-  b.date.localeCompare(a.date) || b.id - a.id
-);
+const DATES_PER_PAGE = 5; // 타임라인 한 페이지에 보여줄 날짜 수
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const $content = document.getElementById("content");
+let calMonth = null;        // 달력에 표시 중인 달 (YYYY-MM)
+let selectedDate = null;    // 달력에서 강조할 날짜
+let sandbox = null;         // SQL 콘솔용 DB 복사본
 
 // ===== 유틸 =====
-
-// localStorage는 시크릿 모드 등에서 막힐 수 있어서 항상 try/catch로 감싼다
 const store = {
   get(key, fallback) {
     try {
@@ -29,9 +26,8 @@ const store = {
   }
 };
 
-// 사용자가 입력한 글자를 화면에 넣을 때 HTML로 해석되지 않도록 변환
-function escapeHTML(text) {
-  return String(text)
+function esc(text) {
+  return String(text ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -39,84 +35,48 @@ function escapeHTML(text) {
     .replace(/'/g, "&#39;");
 }
 
+function toDate(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function formatDate(dateStr) {
-  return dateStr.replace(/-/g, ". ");
+  const d = toDate(dateStr);
+  return `${dateStr.replace(/-/g, ". ")} (${WEEKDAYS[d.getDay()]})`;
 }
 
-function countBy(list, getKeys) {
-  const counts = {};
-  list.forEach(item => {
-    getKeys(item).forEach(key => {
-      counts[key] = (counts[key] || 0) + 1;
-    });
+function renderMarkdown(md) {
+  return DOMPurify.sanitize(marked.parse(md, { gfm: true }));
+}
+
+function typeBadge(p) {
+  return `<a class="badge" href="#/type/${esc(p.type_code)}" style="--c:${esc(p.type_color)}">${esc(p.type_name)}</a>`;
+}
+
+function dayBadge(dayNo) {
+  return dayNo ? `<span class="day-badge">Day ${dayNo}</span>` : `<span class="day-badge off">자습일</span>`;
+}
+
+// 같은 날짜끼리 묶기 (입력은 이미 날짜순 정렬된 상태)
+function groupByDate(posts) {
+  const groups = [];
+  posts.forEach(p => {
+    const last = groups[groups.length - 1];
+    if (last && last.date === p.date) last.posts.push(p);
+    else groups.push({ date: p.date, dayNo: p.day_no, sessionTitle: p.session_title, posts: [p] });
   });
-  return counts;
+  return groups;
 }
 
-// ===== 사이드바 =====
-function renderSidebar(activeCategory) {
-  const categoryCounts = countBy(posts, p => [p.category]);
-  const allActive = activeCategory === undefined ? "active" : "";
-
-  document.getElementById("categoryList").innerHTML =
-    `<li><a href="#/" class="${allActive}">전체 글 <span class="count">(${posts.length})</span></a></li>` +
-    Object.entries(categoryCounts)
-      .map(([name, count]) => {
-        const active = name === activeCategory ? "active" : "";
-        return `<li><a href="#/category/${encodeURIComponent(name)}" class="${active}">
-          └ ${escapeHTML(name)} <span class="count">(${count})</span></a></li>`;
-      })
-      .join("");
-
-  document.getElementById("recentList").innerHTML = posts
-    .slice(0, 5)
-    .map(p => `<li><a href="#/post/${p.id}">${escapeHTML(p.title)}</a></li>`)
-    .join("");
-
-  const tagCounts = countBy(posts, p => p.tags);
-  document.getElementById("tagCloud").innerHTML = Object.keys(tagCounts)
-    .map(tag => `<a class="tag" href="#/tag/${encodeURIComponent(tag)}">#${escapeHTML(tag)}</a>`)
-    .join("");
-}
-
-// 방문자 수 (이 브라우저 기준, 하루에 한 번만 증가)
-function countVisit() {
-  const today = new Date().toISOString().slice(0, 10);
-  const visit = store.get("visit", { total: 0, today: 0, date: "" });
-
-  if (visit.date !== today) {
-    visit.today = 0;
-    visit.date = today;
-  }
-  if (!sessionFlag()) {
-    visit.total += 1;
-    visit.today += 1;
-    store.set("visit", visit);
-  }
-
-  document.getElementById("visitTotal").textContent = visit.total;
-  document.getElementById("visitToday").textContent = visit.today;
-}
-
-// 새로고침할 때마다 숫자가 오르지 않도록 세션당 한 번만 센다
-function sessionFlag() {
-  try {
-    if (sessionStorage.getItem("visited")) return true;
-    sessionStorage.setItem("visited", "1");
-  } catch {
-    // 무시
-  }
-  return false;
-}
-
-// ===== 글 목록 =====
-function renderList(list, heading, page, baseHash) {
-  const totalPages = Math.max(1, Math.ceil(list.length / PER_PAGE));
+// ===== 타임라인 (일자별 목록) =====
+function renderTimeline({ heading, intro = "", posts, page, baseHash }) {
+  const groups = groupByDate(posts);
+  const totalPages = Math.max(1, Math.ceil(groups.length / DATES_PER_PAGE));
   const current = Math.min(Math.max(1, page), totalPages);
-  const pageItems = list.slice((current - 1) * PER_PAGE, current * PER_PAGE);
+  const pageGroups = groups.slice((current - 1) * DATES_PER_PAGE, current * DATES_PER_PAGE);
 
-  const cards = pageItems.length
-    ? pageItems.map(postCard).join("")
+  const body = pageGroups.length
+    ? pageGroups.map(dayBlock).join("")
     : `<div class="empty">글이 없습니다.</div>`;
 
   let pagination = "";
@@ -128,138 +88,271 @@ function renderList(list, heading, page, baseHash) {
       `</nav>`;
   }
 
-  $content.innerHTML = `<h1 class="list-heading">${heading}</h1>${cards}${pagination}`;
+  $content.innerHTML = `
+    <h1 class="list-heading">${heading} <span class="count">${posts.length}개의 글</span></h1>
+    ${intro}
+    <div class="timeline">${body}</div>
+    ${pagination}`;
 }
 
-function postCard(p) {
+function dayBlock(group) {
   return `
-    <a class="post-card" href="#/post/${p.id}">
-      <div class="post-card-body">
-        <span class="post-category">${escapeHTML(p.category)}</span>
-        <h2 class="post-card-title">${escapeHTML(p.title)}</h2>
-        <p class="post-excerpt">${escapeHTML(p.excerpt)}</p>
-        <div class="post-meta">${formatDate(p.date)} · 댓글 ${getComments(p.id).length} · ♥ ${getLikes(p.id)}</div>
+    <section class="day-block">
+      <header class="day-head">
+        <a href="#/date/${group.date}" class="day-date">${dayBadge(group.dayNo)} ${formatDate(group.date)}</a>
+        ${group.sessionTitle ? `<span class="day-title">${esc(group.sessionTitle)}</span>` : ""}
+      </header>
+      <div class="day-posts">${group.posts.map(postItem).join("")}</div>
+    </section>`;
+}
+
+function postItem(p) {
+  return `
+    <article class="post-item">
+      <div class="post-item-meta">
+        ${typeBadge(p)}
+        ${p.project_name ? `<a class="project-chip" href="#/project/${esc(p.project_slug)}">📁 ${esc(p.project_name)}</a>` : ""}
       </div>
-      <div class="thumb" style="background:${p.color}" aria-hidden="true">${p.emoji}</div>
-    </a>`;
+      <h2 class="post-item-title"><a href="#/post/${esc(p.slug)}">${esc(p.title)}</a></h2>
+      ${p.summary ? `<p class="post-excerpt">${esc(p.summary)}</p>` : ""}
+    </article>`;
+}
+
+// ===== 회차별 =====
+function renderDays() {
+  const rows = Sessions.listWithCounts();
+  const body = rows.length
+    ? rows.map(s => `
+        <tr>
+          <td><a href="#/date/${s.date}" class="day-badge">Day ${s.day_no}</a></td>
+          <td class="nowrap">${formatDate(s.date)}</td>
+          <td><a href="#/date/${s.date}"><b>${esc(s.title)}</b></a>${s.summary ? `<br><small>${esc(s.summary)}</small>` : ""}</td>
+          <td class="num">${s.class_cnt}</td>
+          <td class="num">${s.self_cnt}</td>
+          <td class="num">${s.project_cnt}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="6" class="empty-cell">등록된 수업 회차가 없습니다.</td></tr>`;
+
+  $content.innerHTML = `
+    <h1 class="list-heading">수업 회차 <span class="count">${rows.length}회</span></h1>
+    <div class="card table-wrap">
+      <table class="data-table">
+        <thead><tr><th>회차</th><th>날짜</th><th>주제</th><th>수업</th><th>자습</th><th>프로젝트</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`;
 }
 
 // ===== 글 상세 =====
-function renderPost(id) {
-  const index = posts.findIndex(p => p.id === id);
-  if (index === -1) {
-    $content.innerHTML = `<div class="empty">존재하지 않는 글입니다. <a href="#/">홈으로</a></div>`;
+function renderPost(slug) {
+  const p = Posts.bySlug(slug);
+  if (!p) {
+    $content.innerHTML = `<div class="empty">존재하지 않는 글입니다. <a href="#/">타임라인으로</a></div>`;
     return;
   }
-
-  const p = posts[index];
-  const newer = posts[index - 1]; // 목록에서 위쪽 = 더 최근 글
-  const older = posts[index + 1];
-  const liked = store.get("liked", []).includes(p.id);
+  selectedDate = p.date;
+  const { older, newer } = Posts.neighbors(p);
 
   $content.innerHTML = `
-    <article class="post-detail">
+    <article class="card post-detail">
       <header class="post-header">
-        <a class="post-category" href="#/category/${encodeURIComponent(p.category)}">${escapeHTML(p.category)}</a>
-        <h1 class="post-title">${escapeHTML(p.title)}</h1>
-        <div class="post-meta">이진행 · ${formatDate(p.date)}</div>
+        <div class="post-item-meta">
+          ${typeBadge(p)}
+          ${p.project_name ? `<a class="project-chip" href="#/project/${esc(p.project_slug)}">📁 ${esc(p.project_name)}</a>` : ""}
+        </div>
+        <h1 class="post-title">${esc(p.title)}</h1>
+        <a class="post-meta" href="#/date/${p.date}">${dayBadge(p.day_no)} ${formatDate(p.date)}${p.session_title ? ` · ${esc(p.session_title)}` : ""}</a>
       </header>
 
-      <div class="post-content">${p.content}</div>
-
-      <div class="post-tags">
-        ${p.tags.map(t => `<a class="tag" href="#/tag/${encodeURIComponent(t)}">#${escapeHTML(t)}</a>`).join("")}
-      </div>
-
-      <div class="like-box">
-        <button class="like-btn ${liked ? "liked" : ""}" id="likeBtn">
-          ${liked ? "♥" : "♡"} 공감 <span id="likeCount">${getLikes(p.id)}</span>
-        </button>
-      </div>
+      <div class="post-content">${renderMarkdown(p.content_md)}</div>
 
       <nav class="post-nav">
-        ${older ? `<a href="#/post/${older.id}"><small>← 이전 글</small>${escapeHTML(older.title)}</a>` : "<span></span>"}
-        ${newer ? `<a class="next" href="#/post/${newer.id}"><small>다음 글 →</small>${escapeHTML(newer.title)}</a>` : ""}
+        ${older ? `<a href="#/post/${esc(older.slug)}"><small>← 이전 글</small>${esc(older.title)}</a>` : "<span></span>"}
+        ${newer ? `<a class="next" href="#/post/${esc(newer.slug)}"><small>다음 글 →</small>${esc(newer.title)}</a>` : ""}
       </nav>
-
-      <section class="comments">
-        <h2>댓글 <span id="commentCount">0</span></h2>
-        <form class="comment-form" id="commentForm">
-          <input type="text" id="commentName" placeholder="이름" maxlength="20" required>
-          <textarea id="commentText" placeholder="댓글을 남겨주세요" maxlength="500" required></textarea>
-          <button type="submit">등록</button>
-        </form>
-        <ul class="comment-list" id="commentList"></ul>
-      </section>
     </article>`;
-
-  document.getElementById("likeBtn").addEventListener("click", () => toggleLike(p.id));
-  document.getElementById("commentForm").addEventListener("submit", e => {
-    e.preventDefault();
-    addComment(p.id);
-  });
-  renderComments(p.id);
   window.scrollTo(0, 0);
 }
 
-// ===== 공감 =====
-function getLikes(id) {
-  return store.get("likes", {})[id] || 0;
+// ===== DB 페이지 =====
+const PRESET_QUERIES = [
+  {
+    label: "일자별 글 수",
+    sql: `SELECT date, day_no, session_title, COUNT(*) AS posts\nFROM v_posts\nGROUP BY date\nORDER BY date DESC;`
+  },
+  {
+    label: "유형별 글 수",
+    sql: `SELECT t.name, COUNT(p.id) AS cnt\nFROM post_types t\nLEFT JOIN posts p ON p.type_id = t.id\nGROUP BY t.id;`
+  },
+  {
+    label: "프로젝트 기록",
+    sql: `SELECT pr.name, p.date, p.title\nFROM posts p\nJOIN projects pr ON pr.id = p.project_id\nORDER BY p.date, p.seq;`
+  },
+  {
+    label: "회차 목록",
+    sql: `SELECT * FROM sessions ORDER BY day_no;`
+  }
+];
+
+function renderDbPage() {
+  const tables = Stats.tables();
+  const cards = tables.map(t => `
+    <div class="table-card">
+      <span class="table-kind">${t.type === "view" ? "VIEW" : "TABLE"}</span>
+      <b>${esc(t.name)}</b>
+      <span class="count">${t.rows}행</span>
+    </div>`).join("");
+  const schema = tables.map(t => t.sql).join(";\n\n") + ";";
+
+  $content.innerHTML = `
+    <h1 class="list-heading">데이터베이스</h1>
+    <div class="card db-intro">
+      <p>이 블로그의 모든 글은 <b>SQLite</b> 데이터베이스(<code>db/blog.db</code>)에 저장되어 있고,
+      브라우저에서 <b>sql.js</b>(WebAssembly)로 직접 SQL을 실행해 화면을 그립니다.</p>
+      <div class="table-cards">${cards}</div>
+      <pre class="erd">sessions   (1) ──&lt; (N) posts    수업 회차별 글   (선택)
+post_types (1) ──&lt; (N) posts    글 유형          (필수)
+projects   (1) ──&lt; (N) posts    프로젝트 기록    (선택)</pre>
+      <details>
+        <summary>전체 스키마 보기</summary>
+        <pre><code>${esc(schema)}</code></pre>
+      </details>
+    </div>
+
+    <h2 class="section-title">SQL 콘솔</h2>
+    <div class="card">
+      <div class="presets">
+        ${PRESET_QUERIES.map((q, i) => `<button type="button" class="chip" data-preset="${i}">${esc(q.label)}</button>`).join("")}
+      </div>
+      <textarea id="sqlInput" class="sql-input" spellcheck="false">${esc(PRESET_QUERIES[0].sql)}</textarea>
+      <div class="sql-actions">
+        <small>Ctrl/⌘ + Enter로 실행 · 복사본에서 실행되므로 블로그 데이터는 바뀌지 않아요</small>
+        <button type="button" class="btn-ghost" id="sqlReset">초기화</button>
+        <button type="button" class="btn" id="sqlRun">실행</button>
+      </div>
+      <div id="sqlResult" class="sql-result"></div>
+    </div>`;
+
+  const input = document.getElementById("sqlInput");
+  document.querySelectorAll("[data-preset]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      input.value = PRESET_QUERIES[Number(btn.dataset.preset)].sql;
+      runSql();
+    })
+  );
+  document.getElementById("sqlRun").addEventListener("click", runSql);
+  document.getElementById("sqlReset").addEventListener("click", () => {
+    sandbox = DB.sandbox();
+    document.getElementById("sqlResult").innerHTML = `<p class="sql-msg">복사본을 원래 데이터로 되돌렸습니다.</p>`;
+  });
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      runSql();
+    }
+  });
+  runSql();
 }
 
-function toggleLike(id) {
-  const likes = store.get("likes", {});
-  const liked = store.get("liked", []);
-  const wasLiked = liked.includes(id);
+function runSql() {
+  const $result = document.getElementById("sqlResult");
+  const sql = document.getElementById("sqlInput").value.trim();
+  if (!sql) return;
+  if (!sandbox) sandbox = DB.sandbox();
 
-  likes[id] = Math.max(0, (likes[id] || 0) + (wasLiked ? -1 : 1));
-  const nextLiked = wasLiked ? liked.filter(x => x !== id) : [...liked, id];
-
-  store.set("likes", likes);
-  store.set("liked", nextLiked);
-
-  const btn = document.getElementById("likeBtn");
-  btn.classList.toggle("liked", !wasLiked);
-  btn.innerHTML = `${wasLiked ? "♡" : "♥"} 공감 <span id="likeCount">${likes[id]}</span>`;
+  try {
+    const results = sandbox.exec(sql);
+    if (!results.length) {
+      $result.innerHTML = `<p class="sql-msg">실행 완료 (변경된 행: ${sandbox.getRowsModified()})</p>`;
+      return;
+    }
+    // 여러 문장을 실행했다면 마지막 SELECT 결과를 보여준다
+    const { columns, values } = results[results.length - 1];
+    const shown = values.slice(0, 200);
+    $result.innerHTML = `
+      <p class="sql-msg">${values.length}행${values.length > shown.length ? " (200행까지 표시)" : ""}</p>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>${columns.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead>
+          <tbody>${shown.map(row => `<tr>${row.map(v => `<td>${v === null ? `<i class="null">NULL</i>` : esc(String(v).slice(0, 120))}</td>`).join("")}</tr>`).join("")}</tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    $result.innerHTML = `<p class="sql-error">⚠️ ${esc(err.message)}</p>`;
+  }
 }
 
-// ===== 댓글 =====
-function getComments(id) {
-  return store.get("comments", {})[id] || [];
-}
+// ===== 사이드바 =====
+function renderSidebar(active) {
+  const s = Stats.summary();
+  document.getElementById("stats").innerHTML = `
+    <div><b>${s.days}</b><span>수업일</span></div>
+    <div><b>${s.record_days}</b><span>기록한 날</span></div>
+    <div><b>${s.posts}</b><span>글</span></div>`;
 
-function addComment(id) {
-  const nameInput = document.getElementById("commentName");
-  const textInput = document.getElementById("commentText");
-  const name = nameInput.value.trim();
-  const text = textInput.value.trim();
-  if (!name || !text) return;
-
-  const all = store.get("comments", {});
-  all[id] = [...(all[id] || []), { name, text, date: new Date().toISOString() }];
-  store.set("comments", all);
-
-  textInput.value = "";
-  renderComments(id);
-}
-
-function renderComments(id) {
-  const comments = getComments(id);
-  document.getElementById("commentCount").textContent = comments.length;
-  document.getElementById("commentList").innerHTML = comments
-    .map(c => `
-      <li class="comment">
-        <span class="comment-author">${escapeHTML(c.name)}</span>
-        <span class="comment-date">${new Date(c.date).toLocaleString("ko-KR")}</span>
-        <p class="comment-text">${escapeHTML(c.text)}</p>
-      </li>`)
+  document.getElementById("typeList").innerHTML = Types.withCounts()
+    .map(t => `<li><a href="#/type/${esc(t.code)}" class="${active.type === t.code ? "active" : ""}">
+      <span class="dot" style="background:${esc(t.color)}"></span>${esc(t.name)} <span class="count">(${t.cnt})</span></a></li>`)
     .join("");
+
+  const projects = Projects.withCounts();
+  document.getElementById("projectList").innerHTML = projects.length
+    ? projects.map(p => `<li><a href="#/project/${esc(p.slug)}" class="${active.project === p.slug ? "active" : ""}">
+        📁 ${esc(p.name)} <span class="count">(${p.cnt})</span></a></li>`).join("")
+    : `<li class="count">아직 없음</li>`;
+
+  document.getElementById("recentList").innerHTML = Posts.recent()
+    .map(p => `<li><a href="#/post/${esc(p.slug)}">${esc(p.title)}</a></li>`)
+    .join("");
+
+  document.querySelectorAll("[data-nav]").forEach(a =>
+    a.classList.toggle("active", a.dataset.nav === active.nav)
+  );
+
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const [y, m] = calMonth.split("-").map(Number);
+  document.getElementById("calTitle").textContent = `${y}년 ${m}월`;
+
+  const marks = {};
+  Posts.datesInMonth(calMonth).forEach(r => { marks[r.date] = r; });
+
+  const firstDay = new Date(y, m - 1, 1).getDay();
+  const lastDate = new Date(y, m, 0).getDate();
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  let cells = WEEKDAYS.map(w => `<span class="cal-week">${w}</span>`).join("");
+  cells += "<span></span>".repeat(firstDay);
+  for (let d = 1; d <= lastDate; d++) {
+    const date = `${calMonth}-${String(d).padStart(2, "0")}`;
+    const mark = marks[date];
+    const cls = [
+      "cal-day",
+      mark ? "has" : "",
+      mark && mark.day_no ? "class" : "",
+      date === today ? "today" : "",
+      date === selectedDate ? "selected" : ""
+    ].filter(Boolean).join(" ");
+    cells += mark
+      ? `<a href="#/date/${date}" class="${cls}" title="${mark.day_no ? `Day ${mark.day_no} · ` : ""}글 ${mark.cnt}개">${d}</a>`
+      : `<span class="${cls}">${d}</span>`;
+  }
+  document.getElementById("calendar").innerHTML = cells;
+}
+
+function moveMonth(diff) {
+  const [y, m] = calMonth.split("-").map(Number);
+  const d = new Date(y, m - 1 + diff, 1);
+  calMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  renderCalendar();
 }
 
 // ===== 라우터 =====
-// 주소의 # 뒷부분을 보고 어떤 화면을 그릴지 결정한다
-function render() {
-  // 먼저 "/"로 나눈 뒤 조각별로 디코딩해야 검색어 안의 "/"가 깨지지 않는다
+function parseHash() {
+  // "/"로 먼저 나눈 뒤 조각별로 디코딩해야 검색어 안의 "/"가 깨지지 않는다
   const parts = location.hash.slice(1).split("/").filter(Boolean).map(part => {
     try {
       return decodeURIComponent(part);
@@ -267,53 +360,75 @@ function render() {
       return part;
     }
   });
-
-  // 끝에 /page/N 이 붙어 있으면 페이지 번호로 사용
   let page = 1;
   if (parts[parts.length - 2] === "page") {
     page = parseInt(parts.pop(), 10) || 1;
     parts.pop();
   }
+  return { type: parts[0], value: parts[1], page };
+}
 
-  const [type, value] = parts;
-  let activeCategory;
+function render() {
+  const { type, value, page } = parseHash();
+  const active = { nav: "home" };
+  selectedDate = null;
 
-  if (type === "post") {
-    const post = posts.find(p => p.id === Number(value));
-    activeCategory = post && post.category;
-    renderPost(Number(value));
-  } else if (type === "category" && value) {
-    activeCategory = value;
-    renderList(
-      posts.filter(p => p.category === value),
-      `<strong>${escapeHTML(value)}</strong> 카테고리의 글`,
+  if (type === "post" && value) {
+    renderPost(value);
+  } else if (type === "date" && value) {
+    selectedDate = value;
+    const session = Sessions.byDate(value);
+    renderTimeline({
+      heading: `<strong>${esc(value.replace(/-/g, ". "))}</strong>의 기록`,
+      intro: session && session.summary ? `<p class="list-intro">${esc(session.summary)}</p>` : "",
+      posts: Posts.list({ date: value }),
       page,
-      `#/category/${encodeURIComponent(value)}`
-    );
-  } else if (type === "tag" && value) {
-    renderList(
-      posts.filter(p => p.tags.includes(value)),
-      `<strong>#${escapeHTML(value)}</strong> 태그의 글`,
+      baseHash: `#/date/${value}`
+    });
+  } else if (type === "day" && value) {
+    const session = Sessions.byDay(Number(value));
+    location.replace(session ? `#/date/${session.date}` : "#/days");
+    return;
+  } else if (type === "days") {
+    active.nav = "days";
+    renderDays();
+  } else if (type === "type" && value) {
+    active.type = value;
+    const t = Types.byCode(value);
+    renderTimeline({
+      heading: `<strong>${esc(t ? t.name : value)}</strong> 기록`,
+      posts: Posts.list({ type: value }),
       page,
-      `#/tag/${encodeURIComponent(value)}`
-    );
+      baseHash: `#/type/${encodeURIComponent(value)}`
+    });
+  } else if (type === "project" && value) {
+    active.project = value;
+    const pr = Projects.bySlug(value);
+    renderTimeline({
+      heading: `📁 <strong>${esc(pr ? pr.name : value)}</strong>`,
+      intro: pr ? `<p class="list-intro">${esc(pr.description)}
+        ${pr.repo_url ? `<br><a href="${esc(pr.repo_url)}" target="_blank" rel="noopener">저장소 보기 ↗</a>` : ""}</p>` : "",
+      posts: Posts.list({ project: value }),
+      page,
+      baseHash: `#/project/${encodeURIComponent(value)}`
+    });
   } else if (type === "search" && value) {
-    const q = value.toLowerCase();
-    const plain = html => html.replace(/<[^>]*>/g, " ");
-    renderList(
-      posts.filter(p =>
-        [p.title, p.excerpt, p.category, plain(p.content), ...p.tags]
-          .some(text => text.toLowerCase().includes(q))
-      ),
-      `<strong>'${escapeHTML(value)}'</strong> 검색 결과`,
+    renderTimeline({
+      heading: `<strong>'${esc(value)}'</strong> 검색 결과`,
+      posts: Posts.list({ keyword: value }),
       page,
-      `#/search/${encodeURIComponent(value)}`
-    );
+      baseHash: `#/search/${encodeURIComponent(value)}`
+    });
+  } else if (type === "db") {
+    active.nav = "db";
+    renderDbPage();
   } else {
-    renderList(posts, "전체 글", page, "#");
+    renderTimeline({ heading: "전체 타임라인", posts: Posts.list(), page, baseHash: "#" });
   }
 
-  renderSidebar(activeCategory);
+  // 선택한 날짜가 있으면 달력도 그 달로 이동
+  if (selectedDate) calMonth = selectedDate.slice(0, 7);
+  renderSidebar(active);
 }
 
 // ===== 다크 모드 =====
@@ -322,27 +437,40 @@ function applyTheme(theme) {
   document.getElementById("themeToggle").textContent = theme === "dark" ? "☀️" : "🌙";
 }
 
-function initTheme() {
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  applyTheme(store.get("theme", prefersDark ? "dark" : "light"));
-
-  document.getElementById("themeToggle").addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    applyTheme(next);
-    store.set("theme", next);
-  });
-}
-
-// ===== 검색 =====
-document.getElementById("searchForm").addEventListener("submit", e => {
-  e.preventDefault();
-  const input = document.getElementById("searchInput");
-  const q = input.value.trim();
-  if (q) location.hash = `#/search/${encodeURIComponent(q)}`;
+document.getElementById("themeToggle").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(next);
+  store.set("theme", next);
 });
 
+// ===== 검색 / 달력 버튼 =====
+document.getElementById("searchForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const q = document.getElementById("searchInput").value.trim();
+  if (q) location.hash = `#/search/${encodeURIComponent(q)}`;
+});
+document.getElementById("calPrev").addEventListener("click", () => moveMonth(-1));
+document.getElementById("calNext").addEventListener("click", () => moveMonth(1));
+
 // ===== 시작 =====
-initTheme();
-countVisit();
-window.addEventListener("hashchange", render);
-render();
+async function start() {
+  applyTheme(document.documentElement.dataset.theme || "light");
+  try {
+    await DB.open("db/blog.db");
+  } catch (err) {
+    const isFile = location.protocol === "file:";
+    $content.innerHTML = `
+      <div class="empty">
+        <p>⚠️ 데이터베이스를 불러오지 못했습니다.</p>
+        <p class="count">${esc(err.message)}</p>
+        ${isFile ? `<p>index.html을 직접 열면 브라우저 보안 정책 때문에 DB 파일을 읽을 수 없어요.<br>
+          터미널에서 <code>python3 -m http.server</code> 실행 후 <code>http://localhost:8000</code>으로 접속하세요.</p>` : ""}
+      </div>`;
+    return;
+  }
+  calMonth = (Posts.latestDate() || new Date().toISOString().slice(0, 10)).slice(0, 7);
+  window.addEventListener("hashchange", render);
+  render();
+}
+
+start();

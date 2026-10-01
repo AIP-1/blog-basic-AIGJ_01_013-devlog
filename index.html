@@ -3,16 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="이진행의 개발 공부 기록 블로그">
-  <title>진행의 개발 일지</title>
+  <meta name="description" content="AI응용프로젝트 수업과 자습 내용을 일자별로 기록하는 학습 블로그">
+  <title>진행의 AI응용프로젝트 일지</title>
   <link rel="stylesheet" href="css/style.css">
+  <script>
+    // 화면이 그려지기 전에 테마를 적용해서 깜빡임을 막는다
+    try {
+      const saved = JSON.parse(localStorage.getItem("theme"));
+      const dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    } catch {}
+  </script>
 </head>
 <body>
   <header class="site-header">
     <div class="container header-inner">
-      <a href="#/" class="logo">진행의 개발 일지</a>
+      <a href="#/" class="logo">진행의 <span>AI응용프로젝트</span> 일지</a>
+      <nav class="main-nav" aria-label="주 메뉴">
+        <a href="#/" data-nav="home">타임라인</a>
+        <a href="#/days" data-nav="days">회차별</a>
+        <a href="#/db" data-nav="db">DB</a>
+      </nav>
       <form class="search-form" id="searchForm" role="search">
-        <input type="search" id="searchInput" placeholder="검색어를 입력하세요" aria-label="블로그 검색">
+        <input type="search" id="searchInput" placeholder="검색" aria-label="블로그 검색">
         <button type="submit" aria-label="검색">🔍</button>
       </form>
       <button class="theme-toggle" id="themeToggle" aria-label="다크 모드 전환">🌙</button>
@@ -20,46 +33,56 @@
   </header>
 
   <div class="container layout">
-    <main id="content" class="content" aria-live="polite"></main>
+    <main id="content" class="content" aria-live="polite">
+      <div class="empty">데이터베이스를 불러오는 중...</div>
+    </main>
 
     <aside class="sidebar">
       <section class="widget profile">
         <div class="avatar">진</div>
         <p class="profile-name">이진행</p>
-        <p class="profile-desc">매일 조금씩 배우고 기록합니다.<br>Git, Web, 그리고 개발 이야기.</p>
+        <p class="profile-desc">AI응용프로젝트 수업에서 배운 것과<br>스스로 공부한 것을 매일 기록합니다.</p>
+        <div class="stats" id="stats"></div>
         <a class="profile-link" href="https://github.com/ehgo508" target="_blank" rel="noopener">GitHub ↗</a>
       </section>
 
       <section class="widget">
-        <h2 class="widget-title">카테고리</h2>
-        <ul id="categoryList" class="category-list"></ul>
+        <div class="calendar-head">
+          <button type="button" id="calPrev" aria-label="이전 달">‹</button>
+          <h2 class="widget-title" id="calTitle"></h2>
+          <button type="button" id="calNext" aria-label="다음 달">›</button>
+        </div>
+        <div class="calendar" id="calendar"></div>
+        <p class="calendar-legend"><span class="dot class"></span>수업일 <span class="dot"></span>기록한 날</p>
+      </section>
+
+      <section class="widget">
+        <h2 class="widget-title">유형</h2>
+        <ul id="typeList" class="side-list"></ul>
+      </section>
+
+      <section class="widget">
+        <h2 class="widget-title">프로젝트</h2>
+        <ul id="projectList" class="side-list"></ul>
       </section>
 
       <section class="widget">
         <h2 class="widget-title">최근 글</h2>
-        <ul id="recentList" class="recent-list"></ul>
-      </section>
-
-      <section class="widget">
-        <h2 class="widget-title">태그</h2>
-        <div id="tagCloud" class="tag-cloud"></div>
-      </section>
-
-      <section class="widget visitor">
-        <h2 class="widget-title">방문자</h2>
-        <p>Total <strong id="visitTotal">-</strong></p>
-        <p>Today <strong id="visitToday">-</strong></p>
+        <ul id="recentList" class="side-list recent-list"></ul>
       </section>
     </aside>
   </div>
 
   <footer class="site-footer">
     <div class="container">
-      <p>© 2026 이진행 · Tistory를 참고해 HTML/CSS/JS로 만든 블로그</p>
+      <p>© 2026 이진행 · AI응용프로젝트 · HTML/CSS/JS + SQLite(sql.js)</p>
     </div>
   </footer>
 
-  <script src="js/posts.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+  <script src="js/db.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
