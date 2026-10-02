@@ -32,3 +32,5 @@ summary: 첫 블로그 과제에 대한 피드백을 받았다. 요구사항 분
   - 2D로 먼저 만들고 2.5D로 업그레이드한다.
 
 진행 과정은 `Blogville #N` 글로 남긴다.
+
+> **업데이트 (오후)**: 개인 프로젝트에서 **3인 팀 프로젝트**로 바뀌었다. 이 과정은 [GitHub로 팀 협업하기](#/post/team-collab)와 [Blogville #5](#/post/blogville-req-team)에 정리했다.
