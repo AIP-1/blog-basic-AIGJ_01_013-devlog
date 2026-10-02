@@ -24,3 +24,5 @@ asked_on,question,resolved_on,answer,post_slug
 2026-10-02,PR은 왜 쓰고 merge는 왜 쓰는 거야?,2026-10-02,"PR은 '내 브랜치 작업을 main에 합쳐도 될까요?'라는 결재 요청서이고, 리뷰와 대화 기록이 남는다. merge는 승인된 변경을 실제로 main(모두의 완성본)에 반영하는 것이다. 브랜치에서 안전하게 작업 → PR로 확인 → merge로 반영.",team-collab
 2026-10-02,리뷰한 PR을 고칠 때는 새 PR을 만들어야 해?,2026-10-02,아니다. 원래 PR의 같은 브랜치에 고쳐서 커밋하면 PR이 자동으로 갱신된다. 사소한 수정이면 먼저 merge하고 다음 PR에서 고쳐도 된다. 리뷰를 메신저로 했더라도 GitHub에서 Approve는 눌러 기록을 남긴다.,team-collab
 2026-10-02,"요구사항 표의 '우선' 칸에 있는 M, S, C, W는 무슨 뜻이야?",2026-10-02,"MoSCoW 우선순위다. Must(없으면 서비스가 안 됨), Should(있어야 기획 의도가 삶), Could(여유 있으면), Won't(이번엔 안 함). 시간이 모자라면 C부터 포기하고 M은 절대 포기하지 않는다. 상태(✅🚧⬜❌)는 '만들어졌는가', 우선순위는 '얼마나 중요한가'로 서로 다르다.",blogville-review-scope
+2026-10-02,팀원들이 Blogville 사이트에 들어가려면 어떻게 해야 해?,2026-10-02,아직 배포 전이라 내 컴퓨터의 localhost:3000에는 다른 사람이 들어올 수 없다. 팀원은 저장소를 clone하고 Node.js·PostgreSQL을 설치한 뒤 .env.local을 채우고 db:migrate → db:seed → npm run dev로 각자 실행한다. 주소 하나로 들어오게 하려면 Vercel + Neon 같은 곳에 배포해야 한다.,blogville-plaza-renewal
+2026-10-02,지금까지 작업한 건 push 안 했어?,2026-10-02,push는 되어 있었다. 로컬 브랜치와 GitHub 브랜치가 같은 커밋이었다. 다만 PR이 머지 전이라 main에는 아직 없었다. push(올리기)와 merge(main에 합치기)는 다른 단계다.,blogville-plaza-renewal
