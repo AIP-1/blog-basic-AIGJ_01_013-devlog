@@ -26,3 +26,10 @@ asked_on,question,resolved_on,answer,post_slug
 2026-10-02,"요구사항 표의 '우선' 칸에 있는 M, S, C, W는 무슨 뜻이야?",2026-10-02,"MoSCoW 우선순위다. Must(없으면 서비스가 안 됨), Should(있어야 기획 의도가 삶), Could(여유 있으면), Won't(이번엔 안 함). 시간이 모자라면 C부터 포기하고 M은 절대 포기하지 않는다. 상태(✅🚧⬜❌)는 '만들어졌는가', 우선순위는 '얼마나 중요한가'로 서로 다르다.",blogville-review-scope
 2026-10-02,팀원들이 Blogville 사이트에 들어가려면 어떻게 해야 해?,2026-10-02,아직 배포 전이라 내 컴퓨터의 localhost:3000에는 다른 사람이 들어올 수 없다. 팀원은 저장소를 clone하고 Node.js·PostgreSQL을 설치한 뒤 .env.local을 채우고 db:migrate → db:seed → npm run dev로 각자 실행한다. 주소 하나로 들어오게 하려면 Vercel + Neon 같은 곳에 배포해야 한다.,blogville-plaza-renewal
 2026-10-02,지금까지 작업한 건 push 안 했어?,2026-10-02,push는 되어 있었다. 로컬 브랜치와 GitHub 브랜치가 같은 커밋이었다. 다만 PR이 머지 전이라 main에는 아직 없었다. push(올리기)와 merge(main에 합치기)는 다른 단계다.,blogville-plaza-renewal
+2026-10-06,유니크 키도 ERD에서 키 표시를 해야 해?,2026-10-06,"아니다. 열쇠 표시는 PK와 FK만 한다. UNIQUE는 값이 겹치면 안 된다는 제약조건이라 코멘트에 적는다. 두 컬럼을 합친 UNIQUE는 테이블 코멘트에 UNIQUE(a, b)로 적는다.",erd-practice
+2026-10-06,회원 ID가 있는데 왜 아이디(username)가 하나 더 있어?,2026-10-06,id는 시스템이 만든 대리 키로 절대 안 바뀌고 비지 않아서 PK로 다른 테이블이 가리킨다. username은 사람이 정한 자연 키인데 소셜 로그인 회원은 비어 있고 바뀔 수도 있어서 PK가 될 수 없고 UNIQUE로만 막는다.,erd-practice
+2026-10-06,표시용 아이디는 닉네임 아니야? 왜 NULL 허용이야?,2026-10-06,다르다. display_username은 아이디를 입력한 대소문자 그대로 보여주는 값이라 아이디가 없는 소셜 회원은 비어 있다. 닉네임은 profiles.nickname에 따로 있고 NOT NULL이다.,erd-practice
+2026-10-06,identifying이랑 non-identifying 차이가 뭐야?,2026-10-06,"부모 키가 자식 PK의 일부가 되면 식별(실선), 그냥 일반 FK 컬럼이면 비식별(점선)이다. 자식에게 자기 id가 있으면 비식별, 부모 키 조합이 곧 PK면 식별이다.",erd-practice
+2026-10-06,왜 댓글은 비식별인데 공감은 식별이야?,2026-10-06,"한 사람이 한 글에 댓글은 여러 개 쓸 수 있어서 (글, 회원)으로 한 줄을 특정할 수 없다 → 댓글마다 id 필요 → 비식별. 공감은 한 번만 할 수 있어서 (글, 회원)이 곧 PK → 식별이고, 이 PK가 한 번만 공감 규칙을 DB에서 지켜 준다.",erd-practice
+2026-10-06,Zero or One or Many는 Zero or Many랑 뭐가 달라?,2026-10-06,"뜻은 같다(0..N). 1도 된다는 걸 기호로 한 번 더 강조할 뿐이라, 한 ERD 안에서는 한쪽으로 통일한다.",erd-practice
+2026-10-06,users 테이블인데 왜 FK 컬럼은 user_id야?,2026-10-06,"테이블은 복수형, FK 컬럼은 단수형 + _id로 짓는 관례다. 한 줄이 회원 한 명을 가리키기 때문이다. 역할이 있으면 owner_id, author_id, follower_id처럼 역할 이름을 쓴다.",erd-practice
